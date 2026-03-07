@@ -1,229 +1,282 @@
 <!DOCTYPE html>
+<html>
 
-<html lang="en">
 <head>
+
 <meta charset="UTF-8">
 <title>Vote Tracker</title>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <style>
+
 body{
-background:#0b0012;
-color:white;
 font-family:Arial;
+background:linear-gradient(180deg,#120018,#000);
+color:white;
 text-align:center;
 }
 
 h1{
-margin-top:30px;
-}
-
-canvas{
-max-width:1200px;
-margin:auto;
+margin-top:40px;
+font-size:42px;
+letter-spacing:2px;
 }
 
 table{
-margin:40px auto;
+margin:auto;
 border-collapse:collapse;
-width:600px;
+width:75%;
+margin-top:30px;
+font-size:18px;
+background:rgba(20,0,30,0.6);
+border-radius:12px;
+overflow:hidden;
 }
 
 th,td{
-padding:10px;
-border-bottom:1px solid #333;
+padding:12px;
+border-bottom:1px solid rgba(255,255,255,0.08);
 }
 
-.highlight{
-color:#c026ff;
+th{
+background:#1b001f;
+}
+
+tr:hover{
+background:rgba(255,255,255,0.05);
+}
+
+.lamoon{
+color:#4B0082;
+font-weight:bold;
+font-size:20px;
+text-shadow:
+0 0 3px white,
+0 0 6px #4B0082,
+0 0 10px #4B0082;
+}
+
+.lamoon-row{
+background:rgba(75,0,130,0.15);
+border-left:4px solid #4B0082;
+}
+
+.up{
+color:#00ffa6;
 font-weight:bold;
 }
 
+.gap{
+color:#ffb300;
+}
+
+.chartBox{
+width:80%;
+margin:auto;
+margin-top:60px;
+}
+
 </style>
+
 </head>
 
 <body>
 
-<h1>Vote Growth (24h)</h1>
-<canvas id="growthChart"></canvas>
+<h1>VOTE TRACKER</h1>
 
-<h1>Total Vote Over Time</h1>
+<table id="voteTable"></table>
+
+<div class="chartBox">
+<h2>Vote Growth (24h)</h2>
+<canvas id="hourChart"></canvas>
+</div>
+
+<div class="chartBox">
+<h2>Total Vote Over Time</h2>
 <canvas id="totalChart"></canvas>
-
-<h1>Live Ranking</h1>
-<table id="ranking">
-<thead>
-<tr>
-<th>Rank</th>
-<th>Artist</th>
-<th>Votes</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
+</div>
 
 <script>
 
-const COLORS = {
-"LAMOON":"#a855f7",
-"Son K":"#3b82f6",
-"CONGB":"#f59e0b",
-"UPRIZE O.D - Đức Duy":"#14b8a6",
-"MYLINA":"#8b5cf6",
-"Đào Lê Phương Chi":"#facc15",
-"Bùi Trường Linh (Buitruonglinh)":"#e5e7eb",
-"T.R.I":"#22c55e",
-"Mer":"#ec4899",
-"Jaysonlei":"#ef4444"
+let previousVotes={}
+let voteHistory=JSON.parse(localStorage.getItem("voteHistory"))||{}
+let cumulativeVotes=JSON.parse(localStorage.getItem("cumulativeVotes"))||{}
+
+let colors=[
+"#4B0082","#3ba0ff","#ff9c3b","#44d1c3","#a66cff",
+"#ffd166","#cccccc","#00ffa6","#ff6ec7","#ff4d6d"
+]
+
+let hourLabels=[]
+for(let i=0;i<24;i++){
+hourLabels.push(i+"h")
 }
 
-let growthChart;
-let totalChart;
+function loadVotes(){
 
-async function loadData(){
+fetch("votes.json")
+.then(res=>res.json())
+.then(data=>{
 
-const votes = await fetch("votes.json").then(r=>r.json())
-const history = await fetch("history.json").then(r=>r.json())
+let table=document.getElementById("voteTable")
 
-updateRanking(votes)
-updateCharts(votes,history)
+table.innerHTML=
+"<tr><th>Name</th><th>Vote</th><th>Rank</th><th>Vote/min</th><th>Gap</th></tr>"
+
+for(let i=0;i<data.length;i++){
+
+let name=data[i].name
+let vote=data[i].vote
+let rank=data[i].rank
+
+let diff=0
+
+if(previousVotes[name]){
+diff=vote-previousVotes[name]
+}
+
+previousVotes[name]=vote
+
+let voteClass=diff>0?"up":""
+
+let gap=0
+if(i<data.length-1){
+gap=vote-data[i+1].vote
+}
+
+if(!voteHistory[name]){
+voteHistory[name]=new Array(24).fill(0)
+}
+
+let hour=new Date().getHours()
+voteHistory[name][hour]+=diff
+
+if(!cumulativeVotes[name]){
+cumulativeVotes[name]=[]
+}
+
+cumulativeVotes[name].push(vote)
+
+if(cumulativeVotes[name].length>200){
+cumulativeVotes[name].shift()
+}
+
+table.innerHTML+=
+"<tr class='"+(name=="LAMOON"?"lamoon-row":"")+"'>"+
+"<td class='"+(name=="LAMOON"?"lamoon":"")+"'>"+(name=="LAMOON"?"🌙 ":"")+name+"</td>"+
+"<td>"+vote+"</td>"+
+"<td>"+rank+"</td>"+
+"<td class='"+voteClass+"'>+"+diff+"</td>"+
+"<td class='gap'>"+gap+"</td>"+
+"</tr>"
 
 }
 
-function updateRanking(votes){
+localStorage.setItem("voteHistory",JSON.stringify(voteHistory))
+localStorage.setItem("cumulativeVotes",JSON.stringify(cumulativeVotes))
 
-const sorted = Object.entries(votes).sort((a,b)=>b[1]-a[1])
-
-const tbody = document.querySelector("#ranking tbody")
-tbody.innerHTML=""
-
-sorted.forEach((row,i)=>{
-
-const tr=document.createElement("tr")
-
-if(row[0]==="LAMOON") tr.classList.add("highlight")
-
-tr.innerHTML=`
-<td>${i+1}</td>
-<td>${row[0]}</td>
-<td>${row[1].toLocaleString()}</td>
-`
-
-tbody.appendChild(tr)
+updateHourChart(data)
+updateTotalChart(data)
 
 })
 
 }
 
-function updateCharts(votes,history){
+function updateHourChart(data){
 
-const artists = Object.keys(votes)
+let datasets=[]
 
-const labels = Array.from({length:24},(_,i)=>i+"h")
+for(let i=0;i<data.length;i++){
 
-let growthData={}
+let name=data[i].name
 
-artists.forEach(a=>growthData[a]=Array(24).fill(0))
-
-history.forEach((snap,i)=>{
-
-if(i===0) return
-
-const prev = history[i-1]
-
-const hour = new Date(snap.time).getHours()
-
-artists.forEach(a=>{
-
-let diff = snap.votes[a]-prev.votes[a]
-
-if(diff<0) diff=0   // prevent negative
-
-growthData[a][hour]+=diff
-
+datasets.push({
+label:name,
+data:voteHistory[name],
+borderColor:colors[i],
+backgroundColor:colors[i],
+tension:0.2,
+pointRadius:0
 })
 
+}
+
+hourChart.data.labels=hourLabels
+hourChart.data.datasets=datasets
+hourChart.update()
+
+}
+
+function updateTotalChart(data){
+
+let datasets=[]
+
+for(let i=0;i<data.length;i++){
+
+let name=data[i].name
+
+datasets.push({
+label:name,
+data:cumulativeVotes[name],
+borderColor:colors[i],
+backgroundColor:colors[i],
+tension:0.2,
+pointRadius:0
 })
 
-let datasetsGrowth = artists.map(a=>({
-
-label:a,
-data:growthData[a],
-borderColor:COLORS[a] || "#fff",
-backgroundColor:"transparent",
-borderWidth:a==="LAMOON"?4:2,
-tension:0.4
-
-}))
-
-if(!growthChart){
-
-growthChart = new Chart(document.getElementById("growthChart"),{
-type:"line",
-data:{labels,datasets:datasetsGrowth},
-options:{
-responsive:true,
-plugins:{legend:{labels:{color:"white"}}},
-scales:{
-y:{
-beginAtZero:true,
-min:0,
-ticks:{color:"white"}
-},
-x:{ticks:{color:"white"}}
-}
-}
-})
-
-}else{
-
-growthChart.data.datasets=datasetsGrowth
-growthChart.update()
-
 }
 
-let labelsTotal = history.map(h=>new Date(h.time).toLocaleTimeString())
+let labels=cumulativeVotes[data[0].name].map((_,i)=>i)
 
-let datasetsTotal = artists.map(a=>({
-
-label:a,
-data:history.map(h=>h.votes[a]),
-borderColor:COLORS[a]||"#fff",
-backgroundColor:"transparent",
-borderWidth:a==="LAMOON"?4:2,
-tension:0.3
-
-}))
-
-if(!totalChart){
-
-totalChart = new Chart(document.getElementById("totalChart"),{
-type:"line",
-data:{labels:labelsTotal,datasets:datasetsTotal},
-options:{
-responsive:true,
-plugins:{legend:{labels:{color:"white"}}},
-scales:{
-y:{beginAtZero:true,ticks:{color:"white"}},
-x:{ticks:{color:"white"}}
-}
-}
-})
-
-}else{
-
-totalChart.data.labels=labelsTotal
-totalChart.data.datasets=datasetsTotal
+totalChart.data.labels=labels
+totalChart.data.datasets=datasets
 totalChart.update()
 
 }
 
+let hourChart=new Chart(
+document.getElementById("hourChart"),
+{
+type:"line",
+data:{labels:hourLabels,datasets:[]},
+options:{
+animation:false,
+plugins:{
+legend:{labels:{color:"white"}}
+},
+scales:{
+x:{ticks:{color:"white"}},
+y:{ticks:{color:"white"}}
 }
+}
+}
+)
 
-loadData()
+let totalChart=new Chart(
+document.getElementById("totalChart"),
+{
+type:"line",
+data:{labels:[],datasets:[]},
+options:{
+animation:false,
+plugins:{
+legend:{labels:{color:"white"}}
+},
+scales:{
+x:{ticks:{color:"white"}},
+y:{ticks:{color:"white"}}
+}
+}
+}
+)
 
-setInterval(loadData,60000)
+loadVotes()
+
+setInterval(loadVotes,30000)
 
 </script>
 
 </body>
+
 </html>
