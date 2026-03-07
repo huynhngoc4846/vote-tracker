@@ -1,282 +1,99 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-
 <meta charset="UTF-8">
 <title>Vote Tracker</title>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-
 body{
-font-family:Arial;
-background:linear-gradient(180deg,#120018,#000);
+background:#0b0012;
 color:white;
+font-family:Arial;
 text-align:center;
 }
 
-h1{
-margin-top:40px;
-font-size:42px;
-letter-spacing:2px;
-}
-
-table{
+canvas{
+max-width:1200px;
 margin:auto;
-border-collapse:collapse;
-width:75%;
-margin-top:30px;
-font-size:18px;
-background:rgba(20,0,30,0.6);
-border-radius:12px;
-overflow:hidden;
 }
-
-th,td{
-padding:12px;
-border-bottom:1px solid rgba(255,255,255,0.08);
-}
-
-th{
-background:#1b001f;
-}
-
-tr:hover{
-background:rgba(255,255,255,0.05);
-}
-
-.lamoon{
-color:#4B0082;
-font-weight:bold;
-font-size:20px;
-text-shadow:
-0 0 3px white,
-0 0 6px #4B0082,
-0 0 10px #4B0082;
-}
-
-.lamoon-row{
-background:rgba(75,0,130,0.15);
-border-left:4px solid #4B0082;
-}
-
-.up{
-color:#00ffa6;
-font-weight:bold;
-}
-
-.gap{
-color:#ffb300;
-}
-
-.chartBox{
-width:80%;
-margin:auto;
-margin-top:60px;
-}
-
 </style>
-
 </head>
 
 <body>
 
-<h1>VOTE TRACKER</h1>
-
-<table id="voteTable"></table>
-
-<div class="chartBox">
-<h2>Vote Growth (24h)</h2>
-<canvas id="hourChart"></canvas>
-</div>
-
-<div class="chartBox">
-<h2>Total Vote Over Time</h2>
-<canvas id="totalChart"></canvas>
-</div>
+<h1>Total Vote Over Time</h1>
+<canvas id="voteChart"></canvas>
 
 <script>
 
-let previousVotes={}
-let voteHistory=JSON.parse(localStorage.getItem("voteHistory"))||{}
-let cumulativeVotes=JSON.parse(localStorage.getItem("cumulativeVotes"))||{}
+let chart
 
-let colors=[
-"#4B0082","#3ba0ff","#ff9c3b","#44d1c3","#a66cff",
-"#ffd166","#cccccc","#00ffa6","#ff6ec7","#ff4d6d"
-]
+async function loadData(){
 
-let hourLabels=[]
-for(let i=0;i<24;i++){
-hourLabels.push(i+"h")
-}
+const history = await fetch("history.json").then(r=>r.json())
 
-function loadVotes(){
+if(history.length === 0) return
 
-fetch("votes.json")
-.then(res=>res.json())
-.then(data=>{
+const artists = history[0].votes.map(v=>v.name)
 
-let table=document.getElementById("voteTable")
+const labels = history.map(h=>h.time)
 
-table.innerHTML=
-"<tr><th>Name</th><th>Vote</th><th>Rank</th><th>Vote/min</th><th>Gap</th></tr>"
+const datasets = artists.map(name=>({
 
-for(let i=0;i<data.length;i++){
-
-let name=data[i].name
-let vote=data[i].vote
-let rank=data[i].rank
-
-let diff=0
-
-if(previousVotes[name]){
-diff=vote-previousVotes[name]
-}
-
-previousVotes[name]=vote
-
-let voteClass=diff>0?"up":""
-
-let gap=0
-if(i<data.length-1){
-gap=vote-data[i+1].vote
-}
-
-if(!voteHistory[name]){
-voteHistory[name]=new Array(24).fill(0)
-}
-
-let hour=new Date().getHours()
-voteHistory[name][hour]+=diff
-
-if(!cumulativeVotes[name]){
-cumulativeVotes[name]=[]
-}
-
-cumulativeVotes[name].push(vote)
-
-if(cumulativeVotes[name].length>200){
-cumulativeVotes[name].shift()
-}
-
-table.innerHTML+=
-"<tr class='"+(name=="LAMOON"?"lamoon-row":"")+"'>"+
-"<td class='"+(name=="LAMOON"?"lamoon":"")+"'>"+(name=="LAMOON"?"🌙 ":"")+name+"</td>"+
-"<td>"+vote+"</td>"+
-"<td>"+rank+"</td>"+
-"<td class='"+voteClass+"'>+"+diff+"</td>"+
-"<td class='gap'>"+gap+"</td>"+
-"</tr>"
-
-}
-
-localStorage.setItem("voteHistory",JSON.stringify(voteHistory))
-localStorage.setItem("cumulativeVotes",JSON.stringify(cumulativeVotes))
-
-updateHourChart(data)
-updateTotalChart(data)
-
-})
-
-}
-
-function updateHourChart(data){
-
-let datasets=[]
-
-for(let i=0;i<data.length;i++){
-
-let name=data[i].name
-
-datasets.push({
 label:name,
-data:voteHistory[name],
-borderColor:colors[i],
-backgroundColor:colors[i],
-tension:0.2,
-pointRadius:0
-})
 
-}
+data:history.map(h=>{
+const artist = h.votes.find(v=>v.name===name)
+return artist ? artist.vote : 0
+}),
 
-hourChart.data.labels=hourLabels
-hourChart.data.datasets=datasets
-hourChart.update()
+borderWidth:2,
+tension:0.3
 
-}
+}))
 
-function updateTotalChart(data){
+if(!chart){
 
-let datasets=[]
+chart = new Chart(document.getElementById("voteChart"),{
 
-for(let i=0;i<data.length;i++){
-
-let name=data[i].name
-
-datasets.push({
-label:name,
-data:cumulativeVotes[name],
-borderColor:colors[i],
-backgroundColor:colors[i],
-tension:0.2,
-pointRadius:0
-})
-
-}
-
-let labels=cumulativeVotes[data[0].name].map((_,i)=>i)
-
-totalChart.data.labels=labels
-totalChart.data.datasets=datasets
-totalChart.update()
-
-}
-
-let hourChart=new Chart(
-document.getElementById("hourChart"),
-{
 type:"line",
-data:{labels:hourLabels,datasets:[]},
+
+data:{
+labels,
+datasets
+},
+
 options:{
-animation:false,
+responsive:true,
 plugins:{
-legend:{labels:{color:"white"}}
+legend:{
+labels:{color:"white"}
+}
 },
 scales:{
 x:{ticks:{color:"white"}},
 y:{ticks:{color:"white"}}
 }
 }
-}
-)
 
-let totalChart=new Chart(
-document.getElementById("totalChart"),
-{
-type:"line",
-data:{labels:[],datasets:[]},
-options:{
-animation:false,
-plugins:{
-legend:{labels:{color:"white"}}
-},
-scales:{
-x:{ticks:{color:"white"}},
-y:{ticks:{color:"white"}}
-}
-}
-}
-)
+})
 
-loadVotes()
+}else{
 
-setInterval(loadVotes,30000)
+chart.data.labels = labels
+chart.data.datasets = datasets
+chart.update()
+
+}
+
+}
+
+loadData()
+
+setInterval(loadData,60000)
 
 </script>
 
 </body>
-
 </html>
