@@ -85,6 +85,8 @@ margin-top:60px;
 <div class="chartBox">
 <h2>Total Vote Over Time</h2>
 <canvas id="totalChart"></canvas>
+<h2>Vote / Minute</h2>
+<canvas id="rateChart"></canvas>
 </div>
 
 <script>
@@ -96,6 +98,7 @@ let colors=[
 
 let growthChart
 let totalChart
+let rateChart
 
 async function loadData(){
 
@@ -243,7 +246,74 @@ totalChart.data.datasets=totalDatasets
 totalChart.update()
 
 }
+// ===== VOTE PER MINUTE =====
 
+let rateDatasets=[]
+
+votes.forEach((artist,i)=>{
+
+let name=artist.name.trim()
+let data=[]
+
+for(let j=1;j<history.length;j++){
+
+let prev=history[j-1]
+let curr=history[j]
+
+let prevVote=prev.votes.find(v=>v.name==name)?.vote || 0
+let currVote=curr.votes.find(v=>v.name==name)?.vote || 0
+
+let diff=currVote-prevVote
+if(diff<0) diff=0
+
+let t1=new Date(prev.time)
+let t2=new Date(curr.time)
+
+let minutes=(t2-t1)/60000
+
+let rate=minutes>0?diff/minutes:0
+
+data.push(rate)
+
+}
+
+rateDatasets.push({
+label:name,
+data:data,
+borderColor:colors[i],
+backgroundColor:"transparent",
+borderWidth:name=="LAMOON"?4:2,
+tension:0.3
+})
+
+})
+
+let rateLabels = history.slice(1).map(h=>h.time)
+
+if(!rateChart){
+
+rateChart = new Chart(
+document.getElementById("rateChart"),
+{
+type:"line",
+data:{labels:rateLabels,datasets:rateDatasets},
+options:{
+animation:false,
+plugins:{legend:{labels:{color:"white"}}},
+scales:{
+x:{ticks:{color:"white"}},
+y:{beginAtZero:true,min:0,ticks:{color:"white"}}
+}
+}
+})
+
+}else{
+
+rateChart.data.labels=rateLabels
+rateChart.data.datasets=rateDatasets
+rateChart.update()
+
+}
 }
 
 loadData()
@@ -254,3 +324,4 @@ setInterval(loadData,60000)
 
 </body>
 </html>
+
